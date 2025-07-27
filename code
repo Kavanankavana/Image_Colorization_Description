@@ -1,0 +1,78 @@
+import cv2
+import numpy as np
+from tkinter import Tk, filedialog, Button, Canvas, colorchooser
+from PIL import Image, ImageTk
+
+selected_color = (0, 0, 255)
+mask = None
+original_image = None
+display_image = None
+canvas_image = None
+
+  def choose_color():
+    global selected_color
+    color_code = colorchooser.askcolor(title="Choose Color")
+    if color_code[0]:
+        selected_color = tuple(map(int, color_code[0]))
+
+def load_image():
+    global original_image, display_image, mask, canvas_image
+    file_path = filedialog.askopenfilename()
+    if file_path:
+        original_image = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+        mask = np.zeros_like(original_image)
+        display_image = cv2.cvtColor(original_image, cv2.COLOR_GRAY2RGB)
+        show_image(display_image)
+
+def show_image(img):
+    global canvas_image
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img_pil = Image.fromarray(img_rgb)
+    img_tk = ImageTk.PhotoImage(image=img_pil)
+    canvas.config(width=img_tk.width(), height=img_tk.height())
+    canvas.create_image(0, 0, anchor="nw", image=img_tk)
+    canvas.image = img_tk
+
+  def on_click(event):
+    global display_image, mask, selected_color
+    x, y = event.x, event.y
+    cv2.circle(mask, (x, y), 10, 255, -1)
+    cv2.circle(display_image, (x, y), 10, selected_color, -1)
+    show_image(display_image)
+
+
+def apply_colorization():
+    global display_image, mask, original_image
+    if original_image is None:
+        return
+    
+    result = cv2.cvtColor(original_image, cv2.COLOR_GRAY2BGR)
+    gray_norm = result.astype(float) / 255.0
+    alpha = (mask.astype(float) / 255.0)[..., None]
+    
+    color_layer = np.full_like(result, selected_color, dtype=np.uint8)
+    blended = (1 - alpha) * gray_norm + alpha * (np.array(selected_color) / 255.0)
+    blended = (blended * 255).astype(np.uint8)
+    
+    display_image = blended.copy()
+    show_image(display_image)
+    cv2.imwrite("colorized_output.jpg", display_image)
+    print("Colorized image saved as colorized_output.jpg")
+
+root = Tk()
+root.title("Conditional Image Colorization")
+
+btn_load = Button(root, text="Load Image", command=load_image)
+btn_load.pack()
+
+btn_color = Button(root, text="Choose Color", command=choose_color)
+btn_color.pack()
+
+btn_apply = Button(root, text="Apply Colorization", command=apply_colorization)
+btn_apply.pack()
+
+canvas = Canvas(root)
+canvas.pack()
+canvas.bind("<Button-1>", on_click)
+
+root.mainloop()
